@@ -1,7 +1,7 @@
 public abstract class AirborneState : HFSMState
 {
-    protected AirborneState(HFSMStateMachine machine, HFSMContext ctx, HFSMState parent)
-        : base(machine, ctx, parent)
+    public AirborneState(HFSMStateMachine machine, HFSMContext context, HFSMState parent)
+        : base(machine, context, parent)
     {
     }
 }

@@ -1,12 +1,17 @@
 public class RootState : HFSMState
 {
-    public RootState(HFSMStateMachine machine, HFSMContext context)
-        : base(machine, context, null)
+    public RootState(HFSMStateMachine machine, HFSMContext context, HFSMState parent)
+        : base(machine, context, parent)
     {
     }
 
-    public override void Tick()
+    public override void Enter()
     {
-        // Root doesn't execute gameplay logic
+        var locomotion = machine.GetState<LocomotionState>();
+        var combat = machine.GetState<CombatState>();
+
+        machine.ChangeState(locomotion);
+        machine.ChangeState(machine.GetState<IdleState>());
+        machine.ChangeState(combat);
     }
 }

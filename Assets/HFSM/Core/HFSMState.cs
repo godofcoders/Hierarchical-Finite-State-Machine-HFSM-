@@ -9,6 +9,15 @@ public abstract class HFSMState
     private List<HFSMTransition> transitions = new List<HFSMTransition>();
     public HFSMState Parent => parent;
 
+    private List<HFSMState> children = new();
+
+    public IReadOnlyList<HFSMState> Children => children;
+
+    public void AddChild(HFSMState child)
+    {
+        children.Add(child);
+    }
+
     public IEnumerable<HFSMTransition> GetTransitions()
     {
         return transitions;
@@ -30,9 +39,9 @@ public abstract class HFSMState
         parent?.Tick();
     }
 
-    public void AddTransition(HFSMState targetState, ITransitionCondition condition, int priority = 0)
+    public void AddTransition(HFSMState targetState, TransitionGuard guard, int priority = 0)
     {
-        transitions.Add(new HFSMTransition(targetState, condition, priority));
+        transitions.Add(new HFSMTransition(targetState, guard, priority));
     }
 
     public HFSMState CheckTransitions()

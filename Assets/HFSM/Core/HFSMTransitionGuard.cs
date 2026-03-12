@@ -1,0 +1,1 @@
+public delegate bool TransitionGuard(HFSMContext context);

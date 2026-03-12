@@ -4,31 +4,61 @@ public static class FSMGraphBuilder
     {
         HFSMStateMachine machine = new HFSMStateMachine();
 
-        RootState root = new RootState(machine, context);
+        // ROOT
+        var root = machine.CreateState<RootState>(context, null);
 
-        var idle = machine.CreateState<IdleState>(context, root);
-        var walk = machine.CreateState<WalkState>(context, root);
-        var jump = machine.CreateState<JumpState>(context, root);
-        var attack = machine.CreateState<AttackState>(context, root);
+        // PARALLEL REGIONS
+        var locomotion = machine.CreateState<LocomotionState>(context, root);
+        var combat = machine.CreateState<CombatState>(context, root);
+
+        // LOCOMOTION STATES
+        var idle = machine.CreateState<IdleState>(context, locomotion);
+        var walk = machine.CreateState<WalkState>(context, locomotion);
+        var jump = machine.CreateState<JumpState>(context, locomotion);
+
+        // COMBAT STATE
+        var attack = machine.CreateState<AttackState>(context, combat);
+
+        // GLOBAL STATE
         var death = machine.CreateState<DeathState>(context, root);
 
-        var moveCondition = new MoveCondition();
-        var stopMoveCondition = new StopMoveCondition();
-        var jumpCondition = new JumpPressedCondition();
-        var attackCondition = new AttackPressedCondition();
-        var deathCondition = new DeathCondition();
+        //-----------------------------------
+        // TRANSITION GUARDS
+        //-----------------------------------
 
-        machine.AddGlobalTransition(death, deathCondition, 100);
+        TransitionGuard move = ctx => ctx.MoveInput != 0;
+        TransitionGuard stop = ctx => ctx.MoveInput == 0;
+        TransitionGuard jumpPressed = ctx => ctx.JumpPressed && ctx.IsGrounded;
+        TransitionGuard attackPressed = ctx => ctx.AttackPressed;
+        TransitionGuard deathGuard = ctx => ctx.ForceDeath;
 
-        idle.AddTransition(walk, moveCondition, 10);
-        walk.AddTransition(idle, stopMoveCondition, 10);
+        //-----------------------------------
+        // GLOBAL TRANSITIONS
+        //-----------------------------------
 
-        idle.AddTransition(jump, jumpCondition, 30);
-        walk.AddTransition(jump, jumpCondition, 30);
+        machine.AddGlobalTransition(death, deathGuard, 100);
 
-        idle.AddTransition(attack, attackCondition, 40);
+        //-----------------------------------
+        // LOCOMOTION TRANSITIONS
+        //-----------------------------------
 
-        machine.SetInitialState(idle);
+        idle.AddTransition(walk, move, 10);
+        walk.AddTransition(idle, stop, 10);
+
+        idle.AddTransition(jump, jumpPressed, 30);
+        walk.AddTransition(jump, jumpPressed, 30);
+
+        //-----------------------------------
+        // COMBAT TRANSITIONS
+        //-----------------------------------
+
+        combat.AddTransition(attack, attackPressed, 40);
+
+        //-----------------------------------
+        // INITIAL STATE
+        //-----------------------------------
+
+        machine.SetInitialState(root);
 
         return machine;
     }

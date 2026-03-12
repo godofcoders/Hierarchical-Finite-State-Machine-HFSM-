@@ -3,28 +3,47 @@ using System.Collections.Generic;
 
 public class HFSMStateMachine
 {
-    private HFSMState currentState;
+    private List<HFSMState> activeStates = new();
     private HFSMState requestedState;
 
-    public HFSMState CurrentState => currentState;
+    public HFSMState CurrentState => activeStates.Count > 0 ? activeStates[^1] : null;
     private List<HFSMTransition> globalTransitions = new List<HFSMTransition>();
     private Dictionary<Type, HFSMState> stateRegistry = new();
     public void SetInitialState(HFSMState state)
     {
-        currentState = state;
-        currentState.Enter();
+        activeStates.Clear();
+
+        Stack<HFSMState> stack = new();
+
+        HFSMState current = state;
+
+        while (current != null)
+        {
+            stack.Push(current);
+            current = current.Parent;
+        }
+
+        while (stack.Count > 0)
+        {
+            var s = stack.Pop();
+            activeStates.Add(s);
+            s.Enter();
+        }
     }
 
-    public void AddGlobalTransition(HFSMState targetState, ITransitionCondition condition, int priority = 0)
+    public void AddGlobalTransition(HFSMState targetState, TransitionGuard guard, int priority = 0)
     {
-        globalTransitions.Add(new HFSMTransition(targetState, condition, priority));
+        globalTransitions.Add(new HFSMTransition(targetState, guard, priority));
     }
 
     private HFSMState CheckGlobalTransitions()
     {
+        if (CurrentState == null)
+            return null;
+
         foreach (var transition in globalTransitions)
         {
-            if (transition.ShouldTransition(currentState.context))
+            if (transition.ShouldTransition(CurrentState.context))
             {
                 return transition.TargetState;
             }
@@ -35,7 +54,7 @@ public class HFSMStateMachine
 
     public void Tick()
     {
-        if (currentState == null)
+        if (CurrentState == null)
             return;
 
         HFSMState transition = CheckGlobalTransitions();
@@ -50,7 +69,13 @@ public class HFSMStateMachine
             RequestTransition(transition);
         }
 
-        currentState.Tick();
+        var statesSnapshot = new List<HFSMState>(activeStates);
+
+        for (int i = 0; i < statesSnapshot.Count; i++)
+        {
+            statesSnapshot[i].Tick();
+        }
+
         if (requestedState != null)
         {
             ChangeState(requestedState);
@@ -60,16 +85,14 @@ public class HFSMStateMachine
 
     private HFSMState CheckHierarchicalTransitions()
     {
-        HFSMState state = currentState;
-
-        while (state != null)
+        for (int i = activeStates.Count - 1; i >= 0; i--)
         {
+            var state = activeStates[i];
+
             HFSMState transition = state.CheckTransitions();
 
             if (transition != null)
                 return transition;
-
-            state = state.Parent;
         }
 
         return null;
@@ -77,12 +100,47 @@ public class HFSMStateMachine
 
     public void ChangeState(HFSMState newState)
     {
-        if (newState == currentState)
+        if (newState == null)
             return;
 
-        currentState.Exit();
-        currentState = newState;
-        currentState.Enter();
+        List<HFSMState> newPath = new();
+
+        HFSMState current = newState;
+
+        while (current != null)
+        {
+            newPath.Insert(0, current);
+            current = current.Parent;
+        }
+
+        int commonIndex = 0;
+
+        while (commonIndex < activeStates.Count &&
+               commonIndex < newPath.Count &&
+               activeStates[commonIndex] == newPath[commonIndex])
+        {
+            commonIndex++;
+        }
+
+        for (int i = activeStates.Count - 1; i >= commonIndex; i--)
+        {
+            var state = activeStates[i];
+
+            if (!newPath.Contains(state))
+            {
+                state.Exit();
+                activeStates.RemoveAt(i);
+            }
+        }
+
+        for (int i = commonIndex; i < newPath.Count; i++)
+        {
+            if (!activeStates.Contains(newPath[i]))
+            {
+                activeStates.Add(newPath[i]);
+                newPath[i].Enter();
+            }
+        }
     }
 
     public void RequestTransition(HFSMState state)
