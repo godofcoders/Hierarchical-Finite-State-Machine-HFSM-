@@ -39,9 +39,11 @@ public abstract class HFSMState
         parent?.Tick();
     }
 
-    public void AddTransition(HFSMState targetState, TransitionGuard guard, int priority = 0)
+    public void AddTransition(HFSMState target, TransitionGuard guard, int priority = 0)
     {
-        transitions.Add(new HFSMTransition(targetState, guard, priority));
+        transitions.Add(new HFSMTransition(target, guard, priority));
+
+        transitions.Sort((a, b) => b.Priority.CompareTo(a.Priority));
     }
 
     public HFSMState CheckTransitions()

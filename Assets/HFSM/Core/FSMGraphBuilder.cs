@@ -4,62 +4,62 @@ public static class FSMGraphBuilder
     {
         HFSMStateMachine machine = new HFSMStateMachine();
 
-        // ROOT
-        var root = machine.CreateState<RootState>(context, null);
+        // 1. ROOT
+        RootState root = machine.CreateState<RootState>(context, null);
 
-        // PARALLEL REGIONS
-        var locomotion = machine.CreateState<LocomotionState>(context, root);
-        var combat = machine.CreateState<CombatState>(context, root);
+        // 2. BUILD SUB-GRAPHS (Passing references downward)
+        var locomotion = BuildLocomotion(machine, context, root);
+        var attack = BuildCombat(machine, context, root, locomotion);
 
-        // LOCOMOTION STATES
-        var idle = machine.CreateState<IdleState>(context, locomotion);
-        var walk = machine.CreateState<WalkState>(context, locomotion);
-        var jump = machine.CreateState<JumpState>(context, locomotion);
+        // 3. GLOBAL SETUP
+        SetupGlobals(machine, context, root);
 
-        // COMBAT STATE
-        var attack = machine.CreateState<AttackState>(context, combat);
-
-        // GLOBAL STATE
-        var death = machine.CreateState<DeathState>(context, root);
-
-        //-----------------------------------
-        // TRANSITION GUARDS
-        //-----------------------------------
-
-        TransitionGuard move = ctx => ctx.MoveInput != 0;
-        TransitionGuard stop = ctx => ctx.MoveInput == 0;
-        TransitionGuard jumpPressed = ctx => ctx.JumpPressed && ctx.IsGrounded;
-        TransitionGuard attackPressed = ctx => ctx.AttackPressed;
-        TransitionGuard deathGuard = ctx => ctx.ForceDeath;
-
-        //-----------------------------------
-        // GLOBAL TRANSITIONS
-        //-----------------------------------
-
-        machine.AddGlobalTransition(death, deathGuard, 100);
-
-        //-----------------------------------
-        // LOCOMOTION TRANSITIONS
-        //-----------------------------------
-
-        idle.AddTransition(walk, move, 10);
-        walk.AddTransition(idle, stop, 10);
-
-        idle.AddTransition(jump, jumpPressed, 30);
-        walk.AddTransition(jump, jumpPressed, 30);
-
-        //-----------------------------------
-        // COMBAT TRANSITIONS
-        //-----------------------------------
-
-        combat.AddTransition(attack, attackPressed, 40);
-
-        //-----------------------------------
-        // INITIAL STATE
-        //-----------------------------------
-
+        // 4. INITIAL STATE
         machine.SetInitialState(root);
 
         return machine;
+    }
+
+    private static SubStateMachineState BuildLocomotion(HFSMStateMachine machine, HFSMContext context, RootState root)
+    {
+        var locomotion = machine.CreateState<SubStateMachineState>(context, root);
+        HFSMStateMachine locomotionMachine = locomotion.GetSubMachine();
+
+        /* --- CREATE STATES --- */
+        var idle = locomotionMachine.CreateState<IdleState>(context, locomotion);
+        var walk = locomotionMachine.CreateState<WalkState>(context, locomotion);
+        var jump = locomotionMachine.CreateState<JumpState>(context, locomotion);
+
+        /* --- WIRE TRANSITIONS --- */
+        idle.AddTransition(walk, ctx => ctx.MoveInput != 0, 10);
+        walk.AddTransition(idle, ctx => ctx.MoveInput == 0, 10);
+
+        idle.AddTransition(jump, ctx => ctx.JumpPressed, 30);
+        walk.AddTransition(jump, ctx => ctx.JumpPressed, 30);
+
+        /* --- SET INITIALS --- */
+        locomotionMachine.SetInitialState(idle);
+        locomotion.SetInitialSubState(idle);
+
+        return locomotion; // Return the reference so other domains can transition to it
+    }
+
+    private static AttackState BuildCombat(HFSMStateMachine machine, HFSMContext context, RootState root, SubStateMachineState locomotion)
+    {
+        var attack = machine.CreateState<AttackState>(context, root);
+
+        /* --- WIRE TRANSITIONS --- */
+        // Transition back to the locomotion state reference we passed in
+        attack.AddTransition(locomotion, ctx => !ctx.AttackPressed, 10);
+
+        return attack;
+    }
+
+    private static void SetupGlobals(HFSMStateMachine machine, HFSMContext context, RootState root)
+    {
+        var death = machine.CreateState<DeathState>(context, root);
+
+        /* --- WIRE GLOBAL TRANSITIONS --- */
+        machine.AddGlobalTransition(death, ctx => ctx.ForceDeath, 100);
     }
 }

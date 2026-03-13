@@ -1,17 +1,17 @@
 public class RootState : HFSMState
 {
+    private bool initialized;
+
     public RootState(HFSMStateMachine machine, HFSMContext context, HFSMState parent)
-        : base(machine, context, parent)
-    {
-    }
+        : base(machine, context, parent) { }
 
     public override void Enter()
     {
-        var locomotion = machine.GetState<LocomotionState>();
-        var combat = machine.GetState<CombatState>();
+        if (initialized) return;
 
-        machine.ChangeState(locomotion);
-        machine.ChangeState(machine.GetState<IdleState>());
-        machine.ChangeState(combat);
+        initialized = true;
+
+        var locomotion = machine.GetState<SubStateMachineState>();
+        machine.RequestTransition(locomotion);
     }
 }
